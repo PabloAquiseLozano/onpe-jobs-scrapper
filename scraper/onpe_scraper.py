@@ -17,7 +17,6 @@ PAGE_SIZE = 100
 TIPO_LOCACION_SERVICIO = 1
 TIPO_CONCURSO_PUBLICO = 2
 
-CF_TITULO_ESPERADO = "SIGLOC"
 CF_TITULO_BLOCKED = "Just a moment"
 
 
@@ -128,6 +127,7 @@ class ONPEScraper(BaseScraper):
             return self._normalize(all_rows)
         finally:
             browser.stop()
+            await asyncio.sleep(1)
 
     async def _fetch_one_page(
         self,
@@ -234,4 +234,4 @@ class ONPEScraper(BaseScraper):
 
 
 def _passed_cloudflare(title: str) -> bool:
-    return CF_TITULO_ESPERADO.lower() in title.lower() and CF_TITULO_BLOCKED.lower() not in title.lower()
+    return CF_TITULO_BLOCKED.lower() not in title.lower()

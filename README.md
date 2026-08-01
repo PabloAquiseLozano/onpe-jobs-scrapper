@@ -47,7 +47,7 @@ Public-Job-Scrapper/
 ### Como funciona
 
 1. **Lanza Chrome en modo headless** via `nodriver` con flags anti-deteccion (`--headless=new`, `--disable-blink-features=AutomationControlled`).
-2. **Navega a `reclutamiento.onpe.gob.pe/convocatorias`** y espera a que Cloudflare resuelva el challenge.
+2. **Navega a `reclutamiento.onpe.gob.pe/convocatorias`** y espera a que Cloudflare resuelva el challenge. Si el titulo de la pagina sigue siendo el challenge `Just a moment`, aborta la corrida; cualquier otro titulo (como el oficial de la ONPE) se considera superado.
 3. **Llama a la API interna** desde el contexto del navegador (con cookies y tokens de Cloudflare ya resueltos):
 
    ```
@@ -113,6 +113,7 @@ El repositorio incluye un workflow en `.github/workflows/scraper.yml` que:
 - Ejecuta el scraper **cada hora** automaticamente (`cron: "0 * * * *"`).
 - Tambien se puede ejecutar manualmente desde la pestana **Actions** en GitHub (`workflow_dispatch`).
 - Instala Google Chrome y las dependencias automatically.
+- Usa `actions/checkout@v5` y `actions/setup-python@v6` (runtime Node.js 24), libres de los warnings de deprecacion de Node.js 20.
 - **Commitea el JSON** resultante al repositorio, para que los datos queden visibles y versionados.
 
 **Costo en GitHub Actions (repositorio publico):**
