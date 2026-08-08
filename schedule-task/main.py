@@ -2,17 +2,22 @@ import schedule
 import sys
 from datetime import datetime
 
-from config import ONPE, DATA_DIR, SCRAPE_INTERVAL_HOURS
+from config import ONPE, SCRAPE_INTERVAL_HOURS
 from scraper.onpe_scraper import ONPEScraper
 
 
 def scrape_onpe():
     print(f"[{datetime.now().isoformat()}] Scraping ONPE...")
-    scraper = ONPEScraper(ONPE, DATA_DIR)
+    scraper = ONPEScraper(ONPE)
     try:
         data = scraper.scrape()
-        filepath = scraper.save_json(data)
-        print(f"  -> {len(data)} convocatorias guardadas en {filepath}")
+        print(f"  -> {len(data)} convocatorias obtenidas")
+
+        result = scraper.save_to_db(data)
+        print(
+            f"  -> {result['inserted']}/{result['total']} "
+            f"convocatorias insertadas/actualizadas en Supabase"
+        )
     except Exception as e:
         print(f"  -> Error: {e}")
 

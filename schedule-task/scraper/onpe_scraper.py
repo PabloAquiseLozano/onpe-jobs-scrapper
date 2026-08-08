@@ -80,6 +80,8 @@ class ONPEScraper(BaseScraper):
     def scrape(self) -> list[dict]:
         return asyncio.run(self._scrape_async())
 
+
+
     async def _scrape_async(self) -> list[dict]:
         browser = await uc.start(
             browser_executable_path=self.config.get(

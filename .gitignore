@@ -1,4 +1,9 @@
 venv/
+schedule-task/venv/
 __pycache__/
 *.pyc
 .env
+schedule-task/.env
+.env.example
+data/
+__pycache__/**
