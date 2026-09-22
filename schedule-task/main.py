@@ -18,6 +18,10 @@ def scrape_onpe():
             f"  -> {result['inserted']}/{result['total']} "
             f"convocatorias insertadas/actualizadas en Supabase"
         )
+        print(
+            f"  -> {result['reconciled_concluded']} convocatorias antiguas "
+            f"marcadas como concluidas (ya no aparecen como vigentes)"
+        )
     except Exception as e:
         print(f"  -> Error: {e}")
 

@@ -1,0 +1,168 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Badge from '../../components/ui/Badge.astro';
+import Button from '../../components/ui/Button.astro';
+import { supabase } from '../../lib/supabase';
+import { esVigente, parseOdpe, type Convocatoria } from '../../lib/types';
+
+const idPerfil = Number(Astro.params.id);
+
+let convocatoria: Convocatoria | null = null;
+let loadError: string | null = null;
+
+if (!supabase) {
+  loadError = 'Falta configurar PUBLIC_SUPABASE_URL y PUBLIC_SUPABASE_ANON_KEY.';
+} else if (!Number.isFinite(idPerfil)) {
+  loadError = 'Identificador de convocatoria inválido.';
+} else {
+  const { data, error } = await supabase
+    .from('convocatorias')
+    .select('*')
+    .eq('id_perfil', idPerfil)
+    .maybeSingle();
+
+  if (error) {
+    loadError = 'No se pudo cargar la convocatoria desde Supabase. Intenta de nuevo en unos minutos.';
+  } else if (!data) {
+    loadError = 'No encontramos esta convocatoria. Puede que ya no exista en SIGLOC.';
+  } else {
+    convocatoria = data;
+  }
+}
+
+const vigente = convocatoria ? esVigente(convocatoria) : false;
+const remuneracion = convocatoria?.remuneracion_soles
+  ? `S/ ${Number(convocatoria.remuneracion_soles).toLocaleString('es-PE', { minimumFractionDigits: 2 })}`
+  : 'No especificada';
+const fecha = convocatoria?.fecha_publicacion
+  ? new Date(convocatoria.fecha_publicacion).toLocaleDateString('es-PE', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+    })
+  : null;
+const rubros = convocatoria?.rubros ?? [];
+const odpes = (convocatoria?.odpes ?? []).map(parseOdpe);
+
+const pageTitle = convocatoria ? `${convocatoria.titulo} — Convocatorias ONPE` : 'Convocatoria no encontrada';
+const pageDescription = convocatoria
+  ? `${convocatoria.denominacion ?? convocatoria.titulo} · ${remuneracion} · ${vigente ? 'Vigente' : 'Concluido'}`
+  : 'Esta convocatoria ya no está disponible.';
+---
+
+<BaseLayout title={pageTitle} description={pageDescription}>
+  <section class="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-10 md:py-14">
+    <a href="/" class="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white">
+      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+      </svg>
+      Volver a convocatorias
+    </a>
+
+    {loadError && (
+      <div class="flex flex-1 flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-zinc-200 bg-zinc-50 p-12 text-center dark:border-zinc-800 dark:bg-zinc-900/50">
+        <p class="text-lg font-medium text-zinc-900 dark:text-white">No se pudo mostrar esta convocatoria</p>
+        <p class="max-w-md text-sm text-zinc-500 dark:text-zinc-400">{loadError}</p>
+      </div>
+    )}
+
+    {convocatoria && (
+      <article class="flex flex-col gap-6 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 md:p-8">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <h1 class="font-display text-2xl font-semibold tracking-tight text-zinc-900 dark:text-white md:text-3xl">
+              {convocatoria.titulo}
+            </h1>
+            {convocatoria.denominacion && (
+              <p class="mt-1 text-zinc-500 dark:text-zinc-400">{convocatoria.denominacion}</p>
+            )}
+          </div>
+          <Badge vigente={vigente} />
+        </div>
+
+        {rubros.length > 0 && (
+          <div class="flex flex-wrap gap-1.5">
+            {rubros.map((r) => (
+              <span class="rounded-full px-2.5 py-0.5 text-xs text-zinc-600 ring-1 ring-inset ring-zinc-300 dark:text-zinc-400 dark:ring-zinc-700">
+                {r}
+              </span>
+            ))}
+          </div>
+        )}
+
+        <dl class="grid grid-cols-2 gap-x-6 gap-y-4 border-y border-zinc-100 py-6 dark:border-zinc-800 sm:grid-cols-3">
+          <div>
+            <dt class="text-xs text-zinc-400 dark:text-zinc-500">Remuneración</dt>
+            <dd class="font-display text-lg font-semibold text-teal-900 dark:text-teal-300">{remuneracion}</dd>
+          </div>
+          {convocatoria.cantidad_requerida != null && (
+            <div>
+              <dt class="text-xs text-zinc-400 dark:text-zinc-500">Vacantes</dt>
+              <dd class="text-lg font-semibold text-zinc-900 dark:text-white">{convocatoria.cantidad_requerida}</dd>
+            </div>
+          )}
+          {fecha && (
+            <div>
+              <dt class="text-xs text-zinc-400 dark:text-zinc-500">Publicado</dt>
+              <dd class="text-sm font-medium text-zinc-700 dark:text-zinc-300">{fecha}</dd>
+            </div>
+          )}
+          {convocatoria.categoria && (
+            <div>
+              <dt class="text-xs text-zinc-400 dark:text-zinc-500">Categoría</dt>
+              <dd class="text-sm font-medium text-zinc-700 dark:text-zinc-300">{convocatoria.categoria}</dd>
+            </div>
+          )}
+          {convocatoria.modalidad && (
+            <div>
+              <dt class="text-xs text-zinc-400 dark:text-zinc-500">Tipo</dt>
+              <dd class="text-sm font-medium text-zinc-700 dark:text-zinc-300">{convocatoria.modalidad}</dd>
+            </div>
+          )}
+          {convocatoria.tipo_perfil && (
+            <div>
+              <dt class="text-xs text-zinc-400 dark:text-zinc-500">Tipo de perfil</dt>
+              <dd class="text-sm font-medium text-zinc-700 dark:text-zinc-300">{convocatoria.tipo_perfil}</dd>
+            </div>
+          )}
+          {(convocatoria.proceso_electoral_nombre || convocatoria.id_proceso_electoral != null) && (
+            <div class="col-span-2 sm:col-span-3">
+              <dt class="text-xs text-zinc-400 dark:text-zinc-500">Proceso electoral</dt>
+              <dd class="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                {convocatoria.proceso_electoral_nombre ?? `#${convocatoria.id_proceso_electoral}`}
+              </dd>
+            </div>
+          )}
+        </dl>
+
+        {odpes.length > 0 && (
+          <div class="flex flex-col gap-3">
+            <h2 class="text-sm font-semibold text-zinc-900 dark:text-white">ODPEs disponibles</h2>
+            <div class="flex flex-col divide-y divide-zinc-100 overflow-hidden rounded-xl border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+              {odpes.map((odpe) => (
+                <div class="flex flex-col gap-1 p-3 sm:flex-row sm:items-center sm:justify-between">
+                  <span class="text-sm font-medium text-zinc-900 dark:text-white">{odpe.distrito}</span>
+                  <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+                    {odpe.cantidad && <span>{odpe.cantidad} vacante(s)</span>}
+                    {odpe.plazoInicio && odpe.plazoFin && (
+                      <span>Plazo: {odpe.plazoInicio} al {odpe.plazoFin}</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div class="flex flex-col gap-3 sm:flex-row">
+          <Button href={convocatoria.url_postulacion || '#'} target="_blank" variant="primary" class="flex-1">
+            Postular
+          </Button>
+          <Button href={convocatoria.url_detalle || '#'} target="_blank" variant="secondary" class="flex-1">
+            Ver en SIGLOC
+          </Button>
+        </div>
+      </article>
+    )}
+  </section>
+</BaseLayout>

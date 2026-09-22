@@ -35,6 +35,9 @@ def upsert_convocatorias(data: list[dict[str, Any]]) -> dict[str, int]:
             "cantidad_requerida": item.get("cantidad_requerida"),
             "fecha_publicacion": item.get("fecha_publicacion"),
             "id_proceso_electoral": item.get("id_proceso_electoral"),
+            "proceso_electoral_nombre": item.get("proceso_electoral_nombre"),
+            "modalidad": item.get("modalidad"),
+            "odpes": item.get("odpes", []),
             "tipo_perfil": item.get("tipo_perfil"),
             "estado_perfil": item.get("estado_perfil"),
             "estado_postulacion": item.get("estado_postulacion"),
@@ -48,14 +51,34 @@ def upsert_convocatorias(data: list[dict[str, Any]]) -> dict[str, int]:
     ]
 
     if not rows:
-        return {"inserted": 0, "total": 0}
+        return {"inserted": 0, "total": 0, "reconciled_concluded": 0}
 
     result = sb.table("convocatorias").upsert(
         rows, on_conflict="id_perfil"
     ).execute()
 
     inserted = len(result.data) if result.data else 0
-    return {"inserted": inserted, "total": len(rows)}
+
+    # Cualquier fila que sigue marcada vigente en la base de datos pero no
+    # aparecio en el scrape de hoy como vigente (ni siquiera por venir de un
+    # id_perfil que ya no trae la API en ningun bucket) ya no esta
+    # disponible en realidad. Se cierra explicitamente en vez de dejarla
+    # vigente para siempre.
+    vigente_ids_hoy = [
+        row["id_perfil"] for row in rows if row["estado_perfil"] == 0
+    ]
+    reconciled = 0
+    if vigente_ids_hoy:
+        recon = (
+            sb.table("convocatorias")
+            .update({"estado_perfil": 1, "estado_postulacion": 1})
+            .eq("estado_perfil", 0)
+            .not_.in_("id_perfil", vigente_ids_hoy)
+            .execute()
+        )
+        reconciled = len(recon.data) if recon.data else 0
+
+    return {"inserted": inserted, "total": len(rows), "reconciled_concluded": reconciled}
 
 
 def fetch_convocatorias(

@@ -1,0 +1,286 @@
+---
+import ConvocatoriaCard from './ConvocatoriaCard.astro';
+import Button from './ui/Button.astro';
+import { supabase } from '../lib/supabase';
+import { esVigente, tieneRemuneracionValida, type Convocatoria } from '../lib/types';
+
+let convocatorias: Convocatoria[] = [];
+let loadError: string | null = null;
+
+if (!supabase) {
+  loadError = 'Falta configurar PUBLIC_SUPABASE_URL y PUBLIC_SUPABASE_ANON_KEY.';
+} else {
+  const { data, error } = await supabase
+    .from('convocatorias')
+    .select('*')
+    .order('fecha_publicacion', { ascending: false });
+
+  if (error) {
+    loadError = 'No se pudo cargar la información desde Supabase. Intenta de nuevo en unos minutos.';
+  } else {
+    convocatorias = (data ?? []).filter(tieneRemuneracionValida);
+  }
+}
+
+const total = convocatorias.length;
+const vigentes = convocatorias.filter(esVigente).length;
+const concluidas = total - vigentes;
+
+const ultimaActualizacion = convocatorias.reduce<string | null>((latest, c) => {
+  const candidate = c.scraped_at ?? c.fecha_publicacion;
+  if (!candidate) return latest;
+  return !latest || candidate > latest ? candidate : latest;
+}, null);
+const ultimaActualizacionLabel = ultimaActualizacion
+  ? new Date(ultimaActualizacion).toLocaleString('es-PE', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  : null;
+---
+
+<section class="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-6 py-10 md:py-14">
+  <header class="flex flex-col gap-4">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div class="flex flex-col gap-2">
+        <h1 class="font-display text-3xl font-semibold tracking-tight text-zinc-900 sm:text-4xl dark:text-white">
+          Convocatorias ONPE
+        </h1>
+        <p class="max-w-2xl text-zinc-500 dark:text-zinc-400">
+          Locación de servicios y concurso público publicados en SIGLOC, extraídos automáticamente cada hora.
+        </p>
+        {ultimaActualizacionLabel && (
+          <p class="text-xs text-zinc-400 dark:text-zinc-500">Última actualización: {ultimaActualizacionLabel}</p>
+        )}
+      </div>
+      <Button href="/" variant="secondary" class="shrink-0">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M4 4v5h5M20 20v-5h-5M4 9a8 8 0 0114-5.3M20 15a8 8 0 01-14 5.3"
+          ></path>
+        </svg>
+        Actualizar
+      </Button>
+    </div>
+
+    {!loadError && (
+      <div class="flex flex-wrap gap-3">
+        <div class="flex items-center gap-2 rounded-xl bg-zinc-100 px-4 py-2.5 dark:bg-zinc-900">
+          <span class="text-2xl font-semibold text-zinc-900 dark:text-white">{total}</span>
+          <span class="text-sm text-zinc-500 dark:text-zinc-400">Total</span>
+        </div>
+        <div class="flex items-center gap-2 rounded-xl bg-emerald-50 px-4 py-2.5 dark:bg-emerald-400/10">
+          <span class="text-2xl font-semibold text-emerald-700 dark:text-emerald-300">{vigentes}</span>
+          <span class="text-sm text-zinc-500 dark:text-zinc-400">Vigentes</span>
+        </div>
+        <div class="flex items-center gap-2 rounded-xl bg-zinc-100 px-4 py-2.5 dark:bg-zinc-900">
+          <span class="text-2xl font-semibold text-zinc-600 dark:text-zinc-300">{concluidas}</span>
+          <span class="text-sm text-zinc-500 dark:text-zinc-400">Concluidas</span>
+        </div>
+      </div>
+    )}
+  </header>
+
+  {loadError ? (
+    <div class="flex flex-1 flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-zinc-200 bg-zinc-50 p-12 text-center dark:border-zinc-800 dark:bg-zinc-900/50">
+      <p class="text-lg font-medium text-zinc-900 dark:text-white">No se pudo cargar la información</p>
+      <p class="max-w-md text-sm text-zinc-500 dark:text-zinc-400">{loadError}</p>
+    </div>
+  ) : (
+    <>
+      <div class="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div class="relative flex-1">
+            <svg
+              class="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              ></path>
+            </svg>
+            <label for="search-input" class="sr-only">Buscar por título, denominación o rubro</label>
+            <input
+              id="search-input"
+              type="text"
+              placeholder="Buscar por título, denominación o rubro..."
+              class="w-full rounded-lg border border-zinc-300 py-2.5 pl-10 pr-4 text-sm text-zinc-900 placeholder-zinc-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-white"
+            />
+          </div>
+          <label for="filter-estado" class="sr-only">Filtrar por estado</label>
+          <select
+            id="filter-estado"
+            class="rounded-lg border border-zinc-300 px-4 py-2.5 text-sm text-zinc-900 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-white"
+          >
+            <option value="">Todos los estados</option>
+            <option value="0">Vigentes</option>
+            <option value="1">Concluidos</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="convocatorias-grid" class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {convocatorias.map((c) => (
+          <ConvocatoriaCard convocatoria={c} />
+        ))}
+      </div>
+
+      <div
+        id="empty-state"
+        class="hidden flex-1 flex-col items-center justify-center gap-4 rounded-2xl border-2 border-dashed border-zinc-200 bg-zinc-50 p-12 text-center dark:border-zinc-800 dark:bg-zinc-900/50"
+      >
+        <p class="text-lg font-medium text-zinc-900 dark:text-white">No se encontraron convocatorias</p>
+        <p class="text-sm text-zinc-500 dark:text-zinc-400">Intenta cambiar los filtros de búsqueda.</p>
+      </div>
+
+      <div id="pagination" class="hidden flex-wrap items-center justify-between gap-4">
+        <label class="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
+          Mostrar
+          <select
+            id="page-size"
+            class="rounded-lg border border-zinc-300 px-2 py-1.5 text-sm text-zinc-900 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-white"
+          >
+            <option value="20" selected>20</option>
+            <option value="10">10</option>
+            <option value="5">5</option>
+          </select>
+          por página
+        </label>
+
+        <nav id="page-numbers" class="flex items-center gap-1" aria-label="Paginación"></nav>
+      </div>
+    </>
+  )}
+</section>
+
+<script>
+  const searchInput = document.getElementById('search-input') as HTMLInputElement | null;
+  const filterEstado = document.getElementById('filter-estado') as HTMLSelectElement | null;
+  const grid = document.getElementById('convocatorias-grid');
+  const emptyState = document.getElementById('empty-state');
+  const pagination = document.getElementById('pagination');
+  const pageSizeSelect = document.getElementById('page-size') as HTMLSelectElement | null;
+  const pageNumbers = document.getElementById('page-numbers');
+
+  if (searchInput && filterEstado && grid && emptyState && pagination && pageSizeSelect && pageNumbers) {
+    const cards = Array.from(grid.querySelectorAll<HTMLElement>('[data-convocatoria]'));
+    let pageSize = Number(pageSizeSelect.value);
+    let currentPage = 1;
+
+    const getMatching = () => {
+      const query = searchInput.value.trim().toLowerCase();
+      const estado = filterEstado.value;
+      return cards.filter((card) => {
+        const matchesSearch = !query || (card.dataset.search ?? '').includes(query);
+        const matchesEstado = !estado || card.dataset.estado === estado;
+        return matchesSearch && matchesEstado;
+      });
+    };
+
+    // Ventana de numeros de pagina con "..." para no listar decenas de
+    // botones cuando hay muchas paginas: primera, ultima, y un rango
+    // alrededor de la pagina actual.
+    const pageWindow = (current: number, total: number): (number | '...')[] => {
+      const pages = new Set([1, total, current - 1, current, current + 1]);
+      const sorted = [...pages].filter((p) => p >= 1 && p <= total).sort((a, b) => a - b);
+      const result: (number | '...')[] = [];
+      let prev = 0;
+      for (const p of sorted) {
+        if (prev && p - prev > 1) result.push('...');
+        result.push(p);
+        prev = p;
+      }
+      return result;
+    };
+
+    const pageButtonClass = (active: boolean) =>
+      `inline-flex h-8 min-w-8 items-center justify-center rounded-lg px-2 text-sm font-medium transition ${
+        active
+          ? 'bg-teal-900 text-white dark:bg-teal-500'
+          : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800'
+      }`;
+
+    const renderPagination = (current: number, total: number) => {
+      pageNumbers.innerHTML = '';
+
+      const addButton = (label: string, page: number, opts: { active?: boolean; disabled?: boolean } = {}) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = label;
+        btn.disabled = !!opts.disabled;
+        btn.className = opts.disabled
+          ? 'inline-flex h-8 min-w-8 items-center justify-center rounded-lg px-2 text-sm text-zinc-300 dark:text-zinc-700'
+          : pageButtonClass(!!opts.active);
+        if (!opts.disabled) {
+          btn.addEventListener('click', () => {
+            currentPage = page;
+            render();
+            grid.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          });
+        }
+        pageNumbers.appendChild(btn);
+      };
+
+      addButton('‹', current - 1, { disabled: current <= 1 });
+      for (const p of pageWindow(current, total)) {
+        if (p === '...') {
+          const span = document.createElement('span');
+          span.textContent = '…';
+          span.className = 'px-1 text-sm text-zinc-400 dark:text-zinc-600';
+          pageNumbers.appendChild(span);
+        } else {
+          addButton(String(p), p, { active: p === current });
+        }
+      }
+      addButton('›', current + 1, { disabled: current >= total });
+    };
+
+    const render = () => {
+      const matching = getMatching();
+      const totalPages = Math.max(1, Math.ceil(matching.length / pageSize));
+      currentPage = Math.min(Math.max(currentPage, 1), totalPages);
+
+      const start = (currentPage - 1) * pageSize;
+      const visibleSet = new Set(matching.slice(start, start + pageSize));
+
+      for (const card of cards) {
+        card.hidden = !visibleSet.has(card);
+      }
+
+      emptyState.classList.toggle('hidden', matching.length > 0);
+      emptyState.classList.toggle('flex', matching.length === 0);
+
+      const showPagination = matching.length > 0;
+      pagination.classList.toggle('hidden', !showPagination);
+      pagination.classList.toggle('flex', showPagination);
+      if (showPagination) renderPagination(currentPage, totalPages);
+    };
+
+    searchInput.addEventListener('input', () => {
+      currentPage = 1;
+      render();
+    });
+    filterEstado.addEventListener('change', () => {
+      currentPage = 1;
+      render();
+    });
+    pageSizeSelect.addEventListener('change', () => {
+      pageSize = Number(pageSizeSelect.value);
+      currentPage = 1;
+      render();
+    });
+
+    render();
+  }
+</script>

@@ -63,6 +63,20 @@ def _build_get_body(endpoint: str) -> str:
     )
 
 
+def _build_por_id_body(id_perfil: int) -> str:
+    payload = json.dumps({"idPerfil": id_perfil, "vigente": True}, separators=(",", ":"))
+    return (
+        "fetch('"
+        + API_PREFIX
+        + "/convocatoria/por-id',"
+        + "{method:'POST',headers:{'Content-Type':'application/json'},"
+        + "body:'"
+        + payload.replace("'", "\\'")
+        + "'}"
+        + ").then(r=>r.text().then(t=>r.status+':'+t))"
+    )
+
+
 def _parse_api_response(raw: str) -> dict[str, Any] | None:
     if not raw or ":" not in raw:
         return None
@@ -123,10 +137,20 @@ class ONPEScraper(BaseScraper):
                 page, TIPO_CONCURSO_PUBLICO, ver_concluidas=True
             )
 
+            vigente_ids = {
+                row.get("idPerfil") for row in vigentes + vigentes_concurso
+            }
+
+            # El endpoint de lista no trae proceso electoral (nombre),
+            # modalidad ni el detalle por ODPE (distrito/cantidad/plazo).
+            # Solo vale la pena pedirlo para las convocatorias que de verdad
+            # estan vigentes hoy (pocas), no para las ~200 concluidas.
+            detalles = await self._fetch_detalles(page, vigente_ids)
+
             all_rows = (
                 vigentes + vigentes_concurso + concluidas + concluidas_concurso
             )
-            return self._normalize(all_rows)
+            return self._normalize(all_rows, vigente_ids, detalles)
         finally:
             browser.stop()
             await asyncio.sleep(1)
@@ -188,7 +212,32 @@ class ONPEScraper(BaseScraper):
 
         return all_rows
 
-    def _normalize(self, raw_rows: list[dict[str, Any]]) -> list[dict]:
+    async def _fetch_detalles(
+        self, page: uc.Tab, ids: set
+    ) -> dict[int, dict[str, Any]]:
+        detalles: dict[int, dict[str, Any]] = {}
+        for id_perfil in ids:
+            if id_perfil is None:
+                continue
+            js = _build_por_id_body(id_perfil)
+            raw = await page.evaluate(js, await_promise=True, return_by_value=True)
+            result = _parse_api_response(str(raw))
+            if result is None or result.get("_http_status"):
+                print(f"  Detalle idPerfil={id_perfil}: sin respuesta valida")
+                continue
+            data = result.get("data")
+            if data:
+                detalles[id_perfil] = data
+        print(f"  Detalle obtenido para {len(detalles)}/{len(ids)} vigentes")
+        return detalles
+
+    def _normalize(
+        self,
+        raw_rows: list[dict[str, Any]],
+        vigente_ids: set,
+        detalles: dict[int, dict[str, Any]] | None = None,
+    ) -> list[dict]:
+        detalles = detalles or {}
         seen_ids: set[int] = set()
         normalized: list[dict] = []
 
@@ -198,6 +247,15 @@ class ONPEScraper(BaseScraper):
                 continue
             if id_perfil is not None:
                 seen_ids.add(id_perfil)
+
+            # ONPE no actualiza `estadoPerfil`/`estadoPostulacion` de forma
+            # confiable: filas de hace meses siguen llegando con
+            # estadoPerfil=0. La unica senal confiable de que una
+            # convocatoria sigue realmente vigente es que aparezca en la
+            # consulta con `verConcluidas=false` (el mismo criterio que usa
+            # el sitio publico, donde hoy solo hay 14 vigentes).
+            es_vigente = id_perfil in vigente_ids
+            detalle = detalles.get(id_perfil) or {}
 
             rubros = [
                 r.get("descripcion", "") for r in (row.get("lsRubros") or [])
@@ -210,13 +268,20 @@ class ONPEScraper(BaseScraper):
                     "categoria": row.get("categoria"),
                     "rubros": rubros,
                     "remuneracion_soles": row.get("montoSoles"),
-                    "cantidad_requerida": row.get("cantidadRequerida"),
+                    "cantidad_requerida": detalle.get("cantidadRequerida")
+                    or row.get("cantidadRequerida"),
                     "fecha_publicacion": row.get("fechaPublicacion", ""),
                     "id_proceso_electoral": row.get("idProcesoElectoral"),
-                    "tipo_perfil": row.get("tipoPerfilNombre"),
-                    "estado_perfil": row.get("estadoPerfil"),
-                    "estado_postulacion": row.get("estadoPostulacion"),
-                    "postulacion_habilitada": row.get("postulacionHabilitada"),
+                    "proceso_electoral_nombre": detalle.get("procesoElectoral"),
+                    "modalidad": detalle.get("modalidad"),
+                    "odpes": detalle.get("lsOdps") or [],
+                    "tipo_perfil": detalle.get("tipoPerfilNombre")
+                    or row.get("tipoPerfilNombre"),
+                    "estado_perfil": 0 if es_vigente else 1,
+                    "estado_postulacion": 0 if es_vigente else 1,
+                    "postulacion_habilitada": detalle.get("postulacionHabilitada")
+                    if detalle
+                    else row.get("postulacionHabilitada"),
                     "url_lista": CONVOCATORIAS_URL,
                     "url_postulacion": f"{BASE_URL}/login",
                     "url_detalle": (

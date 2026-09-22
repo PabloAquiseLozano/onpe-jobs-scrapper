@@ -4,6 +4,7 @@ __pycache__/
 *.pyc
 .env
 schedule-task/.env
+schedule-task/schema.sql
 .env.example
 data/
 __pycache__/**

@@ -1,0 +1,17 @@
+---
+interface Props {
+  vigente: boolean;
+}
+const { vigente } = Astro.props;
+---
+
+<span
+  class={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${
+    vigente
+      ? 'bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/20 dark:bg-emerald-400/10 dark:text-emerald-300 dark:ring-emerald-400/20'
+      : 'bg-zinc-100 text-zinc-600 ring-1 ring-inset ring-zinc-400/20 dark:bg-zinc-400/10 dark:text-zinc-400 dark:ring-zinc-400/20'
+  }`}
+>
+  <span class={`h-1.5 w-1.5 rounded-full ${vigente ? 'bg-emerald-500' : 'bg-zinc-400'}`}></span>
+  {vigente ? 'Vigente' : 'Concluido'}
+</span>

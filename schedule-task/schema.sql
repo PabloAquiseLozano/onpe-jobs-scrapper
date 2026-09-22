@@ -13,6 +13,9 @@ CREATE TABLE IF NOT EXISTS convocatorias (
     fecha_publicacion TEXT,
     id_proceso_electoral INTEGER,
     tipo_perfil TEXT,
+    modalidad TEXT,
+    proceso_electoral_nombre TEXT,
+    odpes TEXT[],
     estado_perfil INTEGER,
     estado_postulacion TEXT,
     postulacion_habilitada BOOLEAN,
@@ -60,3 +63,10 @@ CREATE POLICY "Actualizacion solo service_role"
     ON convocatorias FOR UPDATE
     TO service_role
     USING (true);
+
+-- Migracion: convocatoria/por-id trae datos que el endpoint de lista no da
+-- (proceso electoral con nombre, modalidad, y el detalle de ODPEs con
+-- distrito/cantidad/plazo por cada una). Idempotente para bases existentes.
+ALTER TABLE convocatorias ADD COLUMN IF NOT EXISTS modalidad TEXT;
+ALTER TABLE convocatorias ADD COLUMN IF NOT EXISTS proceso_electoral_nombre TEXT;
+ALTER TABLE convocatorias ADD COLUMN IF NOT EXISTS odpes TEXT[];
